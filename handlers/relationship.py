@@ -8,16 +8,22 @@ from filters.allowed_users import AllowedUserFilter
 router = Router()
 
 
-@router.message(F.text == "Сколько мы вместе? ⏳", AllowedUserFilter())
-async def relationship_days_handler(message: Message):
+def day_word(days: int) -> str:
+    if days % 10 == 1 and days % 100 != 11:
+        return "день"
+    if 2 <= days % 10 <= 4 and not 12 <= days % 100 <= 14:
+        return "дня"
+    return "дней"
 
+
+@router.message(F.text, F.text.lower() == "сколько мы вместе? ⏳", AllowedUserFilter())
+async def relationship_days_handler(message: Message):
     start_date = datetime.date(2024, 9, 21)
     today = datetime.date.today()
 
     days_together = (today - start_date).days
+    word = day_word(days_together)
 
     await message.answer(
-        await message.answer(
-    f"⏳ Мы вместе уже\n\n{days_together} дня ❤️"
-        )
+        f"⏳ мы вместе уже\n\n{days_together} {word} ❤️"
     )

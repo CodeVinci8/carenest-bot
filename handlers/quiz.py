@@ -2,11 +2,13 @@ from aiogram import Router
 from aiogram.types import CallbackQuery, FSInputFile
 from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from filters.allowed_users import AllowedUserFilter
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 
+from filters.allowed_users import AllowedUserFilter
 from quiz_data import QUESTIONS
 
 router = Router()
+
 
 class QuizCallback(CallbackData, prefix="quiz"):
     question_index: int
@@ -26,7 +28,7 @@ def get_quiz_keyboard(question_index: int):
                 answer_index=answer_index
             )
         )
-    
+
     builder.adjust(1)
     return builder.as_markup()
 
@@ -43,38 +45,45 @@ async def process_quiz_answer(
 
     if answer_index != correct_index:
         await callback_query.answer(
-            "Неправильный ответ 💔 Попробуй ещё раз",
+            "неправильно 💔 попробуй ещё раз",
             show_alert=True
         )
         return
-    await callback_query.answer("Правильно! ❤️")
+
+    await callback_query.answer("правильно ❤️")
 
     next_index = question_index + 1
-
-    await callback_query.message.delete()
 
     if next_index < len(QUESTIONS):
         next_question = QUESTIONS[next_index]
         photo = FSInputFile(f"photos/{next_question['photo']}")
 
-        await callback_query.message.answer_photo(
+        try:
+            await callback_query.message.delete()
+        except TelegramBadRequest:
+            pass
+
+        try:
+            await callback_query.message.answer_photo(
                 photo=photo,
                 caption=next_question["question"],
                 reply_markup=get_quiz_keyboard(next_index)
-        )
-    else:
-        heart_gif = FSInputFile("photos/heart.gif")
-
-        await callback_query.message.answer_animation(
-            animation=heart_gif,
-            caption=(
-                "УРА - квиз пройден! ❤️\n\n"
-                "Ты ответила правильно на все вопросы.\n"
-                "Твой подарок уже ждёт тебя 🎁"
             )
-        )
+        except TelegramNetworkError:
+            await callback_query.message.answer(
+                "сеть немного шалит 💔 попробуй нажать ещё раз"
+            )
+    else:
+        try:
+            await callback_query.message.delete()
+        except TelegramBadRequest:
+            pass
 
         await callback_query.message.answer(
-            "Спасибо за прохождение квиза! 💌\n"
-            "Напиши мне, чтобы забрать свой подарок."
+            "УРА - квиз пройден! ❤️\n\n"
+            "Ты ответила правильно на все вопросы.\n"
+            "твой настоящий подарок уже ждёт.\n\n"
+            "напиши Никите кодовое слово:\n"
+            "эрнест 🌸\n\n"
+            "и он всё пришлёт !"
         )

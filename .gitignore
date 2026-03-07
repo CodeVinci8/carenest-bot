@@ -14,3 +14,7 @@ __pycache__/
 # Photos
 cute_photos/
 photos/
+
+# local data
+wishlist.db
+quiz_data.py
