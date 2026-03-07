@@ -1,7 +1,7 @@
 from aiogram import Router
 from aiogram.types import Message,FSInputFile
 from aiogram.filters import Command
-from keyboards import get_main_keyboard
+from handlers.keyboards import get_main_keyboard
 
 from quiz_data import QUESTIONS
 from handlers.quiz import get_quiz_keyboard

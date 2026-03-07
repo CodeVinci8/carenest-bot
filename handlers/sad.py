@@ -15,11 +15,6 @@ async def sad_handler(message: Message):
     file_name for file_name in os.listdir("cute_photos")
     if file_name.endswith((".jpg", ".jpeg", ".png", ".webp"))
     ]
-
-    photos = [
-    file_name for file_name in os.listdir("cute_photos")
-    if file_name.endswith((".jpg", ".jpeg", ".png", ".webp"))
-    ]
     
     random_photo = random.choice(photos)
 

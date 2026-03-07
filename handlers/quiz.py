@@ -2,6 +2,7 @@ from aiogram import Router
 from aiogram.types import CallbackQuery, FSInputFile
 from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from filters.allowed_users import AllowedUserFilter
 
 from quiz_data import QUESTIONS
 
@@ -30,7 +31,7 @@ def get_quiz_keyboard(question_index: int):
     return builder.as_markup()
 
 
-@router.callback_query(QuizCallback.filter())
+@router.callback_query(QuizCallback.filter(), AllowedUserFilter())
 async def process_quiz_answer(
     callback_query: CallbackQuery,
     callback_data: QuizCallback
