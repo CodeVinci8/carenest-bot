@@ -11,6 +11,7 @@ from aiogram.types import BotCommand
 from carenest.config import AppConfig
 from carenest.database import WishlistDatabase
 from carenest.handlers import (
+    build_info_router,
     build_mood_router,
     build_quiz_router,
     build_relationship_router,
@@ -18,6 +19,7 @@ from carenest.handlers import (
     build_wishlist_router,
 )
 from carenest.scheduler import build_scheduler
+from carenest.version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +30,16 @@ BOT_COMMANDS = (
     BotCommand(command="days", description="Посчитать дни вместе"),
     BotCommand(command="wish", description="Добавить желание"),
     BotCommand(command="wishlist", description="Показать список желаний"),
+    BotCommand(command="cancel", description="Отменить ввод желания"),
+    BotCommand(command="help", description="Показать справку"),
+    BotCommand(command="about", description="О проекте"),
 )
 
 
 def build_dispatcher(config: AppConfig, database: WishlistDatabase) -> Dispatcher:
     dispatcher = Dispatcher(storage=MemoryStorage())
     dispatcher.include_router(build_start_router(config))
+    dispatcher.include_router(build_info_router(config))
     dispatcher.include_router(build_quiz_router(config))
     dispatcher.include_router(build_mood_router(config))
     dispatcher.include_router(build_relationship_router(config))
@@ -43,14 +49,18 @@ def build_dispatcher(config: AppConfig, database: WishlistDatabase) -> Dispatche
 
 async def set_main_menu(bot: Bot) -> None:
     await bot.set_my_commands(BOT_COMMANDS)
+    logger.info("Команды Telegram зарегистрированы.")
 
 
 async def run_bot(config: AppConfig) -> None:
+    logger.info("Запуск CareNest Bot %s.", __version__)
     database = WishlistDatabase(config.paths.database)
+    logger.info("Подготовка локальной базы данных.")
     try:
         database.initialize()
     except (OSError, sqlite3.Error) as error:
         raise RuntimeError(f"Не удалось подготовить локальную базу данных: {error}") from error
+    logger.info("Локальная база данных готова.")
 
     if config.token is None:
         raise RuntimeError("После проверки конфигурации отсутствует TELEGRAM_TOKEN.")
@@ -75,4 +85,4 @@ async def run_bot(config: AppConfig) -> None:
             scheduler.shutdown(wait=False)
             logger.info("Планировщик остановлен.")
         await bot.session.close()
-        logger.info("CareNest Bot остановлен.")
+        logger.info("Сессия Telegram закрыта. CareNest Bot остановлен.")

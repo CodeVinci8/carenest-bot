@@ -14,6 +14,10 @@ from dotenv import dotenv_values
 
 DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FINAL_MESSAGE = "Квиз завершён. Спасибо, что прошли его до конца!"
+MAX_QUIZ_QUESTION_LENGTH = 800
+MAX_QUIZ_OPTION_LENGTH = 64
+MAX_PERSONAL_FIELD_LENGTH = 200
+MAX_MESSAGE_LENGTH = 4000
 TOKEN_PATTERN = re.compile(r"^\d{5,}:[A-Za-z0-9_-]{20,}$")
 
 
@@ -195,12 +199,21 @@ def _parse_questions(raw_questions: Any, errors: list[str]) -> tuple[QuizQuestio
         if not isinstance(text, str) or not text.strip():
             errors.append(f"{prefix}: поле question должно содержать текст.")
             valid = False
+        elif len(text.strip()) > MAX_QUIZ_QUESTION_LENGTH:
+            errors.append(f"{prefix}: текст длиннее {MAX_QUIZ_QUESTION_LENGTH} символов.")
+            valid = False
         if (
             not isinstance(options, list)
             or len(options) < 2
             or any(not isinstance(option, str) or not option.strip() for option in options)
         ):
             errors.append(f"{prefix}: options должен содержать минимум два непустых ответа.")
+            valid = False
+        elif any(len(option.strip()) > MAX_QUIZ_OPTION_LENGTH for option in options):
+            errors.append(
+                f"{prefix}: каждый вариант должен быть не длиннее "
+                f"{MAX_QUIZ_OPTION_LENGTH} символов."
+            )
             valid = False
         if not isinstance(correct, int) or isinstance(correct, bool):
             errors.append(f"{prefix}: correct должен быть индексом ответа.")
@@ -374,6 +387,11 @@ def inspect_configuration(
     ):
         errors.append("morning_messages должен быть списком непустых строк.")
         morning_messages: tuple[str, ...] = ()
+    elif any(len(message.strip()) > MAX_MESSAGE_LENGTH for message in morning_raw):
+        errors.append(
+            f"Каждый текст в morning_messages должен быть не длиннее {MAX_MESSAGE_LENGTH} символов."
+        )
+        morning_messages = ()
     else:
         morning_messages = tuple(message.strip() for message in morning_raw)
 
@@ -396,16 +414,31 @@ def inspect_configuration(
     ):
         if not isinstance(value, str):
             errors.append(f"{field_name} должен быть строкой.")
+    if isinstance(recipient_name, str) and len(recipient_name) > MAX_PERSONAL_FIELD_LENGTH:
+        errors.append(
+            f"recipient_name должен быть не длиннее {MAX_PERSONAL_FIELD_LENGTH} символов."
+        )
+    if isinstance(code_word, str) and len(code_word) > MAX_PERSONAL_FIELD_LENGTH:
+        errors.append(f"code_word должен быть не длиннее {MAX_PERSONAL_FIELD_LENGTH} символов.")
     if not isinstance(final_message, str) or not final_message.strip():
         errors.append("final_quiz_message не должен быть пустым.")
     elif isinstance(recipient_name, str) and isinstance(code_word, str):
         try:
-            final_message.format(recipient_name=recipient_name, code_word=code_word)
+            rendered_final_message = final_message.format(
+                recipient_name=recipient_name,
+                code_word=code_word,
+            )
         except (KeyError, ValueError):
             errors.append(
                 "final_quiz_message содержит неверный шаблон; доступны только "
                 "{recipient_name} и {code_word}."
             )
+        else:
+            if len(rendered_final_message) > MAX_MESSAGE_LENGTH:
+                errors.append(
+                    f"Итоговый final_quiz_message должен быть не длиннее "
+                    f"{MAX_MESSAGE_LENGTH} символов."
+                )
 
     for question_index, question in enumerate(questions, start=1):
         if question.photo and not (quiz_media / question.photo).is_file():
