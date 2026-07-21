@@ -1,0 +1,35 @@
+{
+  "recipient_name": "близкий человек",
+  "relationship_start_date": "2000-01-01",
+  "final_quiz_message": "Квиз завершён, {recipient_name}! Кодовое слово: {code_word}.",
+  "code_word": "замените-на-своё",
+  "morning_messages": [
+    "Доброе утро! Пусть сегодняшний день будет спокойным и добрым.",
+    "Небольшое напоминание: я рядом и думаю о тебе."
+  ],
+  "scheduler": {
+    "enabled": false,
+    "hour": 9,
+    "minute": 0,
+    "timezone": "Europe/Moscow"
+  },
+  "paths": {
+    "data": "data",
+    "database": "data/wishlist.db",
+    "quiz_media": "media/quiz",
+    "support_media": "media/support"
+  },
+  "quiz": {
+    "questions": [
+      {
+        "question": "Какой ответ указан как верный в этом примере?",
+        "photo": null,
+        "options": [
+          "Первый",
+          "Второй"
+        ],
+        "correct": 0
+      }
+    ]
+  }
+}

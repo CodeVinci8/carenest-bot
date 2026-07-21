@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import logging
+import sqlite3
+
+from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramAPIError
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import BotCommand
+
+from carenest.config import AppConfig
+from carenest.database import WishlistDatabase
+from carenest.handlers import (
+    build_mood_router,
+    build_quiz_router,
+    build_relationship_router,
+    build_start_router,
+    build_wishlist_router,
+)
+from carenest.scheduler import build_scheduler
+
+logger = logging.getLogger(__name__)
+
+BOT_COMMANDS = (
+    BotCommand(command="start", description="Открыть главное меню"),
+    BotCommand(command="quiz", description="Начать личный квиз"),
+    BotCommand(command="mood", description="Поднять настроение"),
+    BotCommand(command="days", description="Посчитать дни вместе"),
+    BotCommand(command="wish", description="Добавить желание"),
+    BotCommand(command="wishlist", description="Показать список желаний"),
+)
+
+
+def build_dispatcher(config: AppConfig, database: WishlistDatabase) -> Dispatcher:
+    dispatcher = Dispatcher(storage=MemoryStorage())
+    dispatcher.include_router(build_start_router(config))
+    dispatcher.include_router(build_quiz_router(config))
+    dispatcher.include_router(build_mood_router(config))
+    dispatcher.include_router(build_relationship_router(config))
+    dispatcher.include_router(build_wishlist_router(config, database))
+    return dispatcher
+
+
+async def set_main_menu(bot: Bot) -> None:
+    await bot.set_my_commands(BOT_COMMANDS)
+
+
+async def run_bot(config: AppConfig) -> None:
+    database = WishlistDatabase(config.paths.database)
+    try:
+        database.initialize()
+    except (OSError, sqlite3.Error) as error:
+        raise RuntimeError(f"Не удалось подготовить локальную базу данных: {error}") from error
+
+    if config.token is None:
+        raise RuntimeError("После проверки конфигурации отсутствует TELEGRAM_TOKEN.")
+
+    bot = Bot(token=config.token)
+    dispatcher = build_dispatcher(config, database)
+    scheduler = build_scheduler(config, bot)
+    try:
+        await set_main_menu(bot)
+        if scheduler is not None:
+            scheduler.start()
+            logger.info("Планировщик утренних сообщений запущен.")
+        else:
+            logger.info("Планировщик утренних сообщений выключен.")
+        logger.info("CareNest Bot запущен.")
+        await dispatcher.start_polling(bot, close_bot_session=False)
+    except TelegramAPIError as error:
+        logger.error("Ошибка Telegram при работе бота: %s", error)
+        raise
+    finally:
+        if scheduler is not None and scheduler.running:
+            scheduler.shutdown(wait=False)
+            logger.info("Планировщик остановлен.")
+        await bot.session.close()
+        logger.info("CareNest Bot остановлен.")
