@@ -31,3 +31,22 @@ class WishlistDatabase:
         with sqlite3.connect(self.path) as connection:
             rows = connection.execute("SELECT id, name FROM items ORDER BY id").fetchall()
         return [(int(item_id), str(name)) for item_id, name in rows]
+
+    def get_item(self, item_id: int) -> tuple[int, str] | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                "SELECT id, name FROM items WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return int(row[0]), str(row[1])
+
+    def delete_item(self, item_id: int, expected_name: str) -> bool:
+        with sqlite3.connect(self.path) as connection:
+            cursor = connection.execute(
+                "DELETE FROM items WHERE id = ? AND name = ?",
+                (item_id, expected_name),
+            )
+            connection.commit()
+            return cursor.rowcount == 1

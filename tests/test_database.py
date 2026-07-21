@@ -25,3 +25,14 @@ def test_existing_items_table_is_preserved(tmp_path: Path) -> None:
     database.initialize()
 
     assert database.get_items() == [(7, "Старое желание")]
+
+
+def test_get_and_conditional_delete(tmp_path: Path) -> None:
+    database = WishlistDatabase(tmp_path / "wishlist.db")
+    database.initialize()
+    item_id = database.add_item("Плед")
+
+    assert database.get_item(item_id) == (item_id, "Плед")
+    assert database.delete_item(item_id, "Другое название") is False
+    assert database.delete_item(item_id, "Плед") is True
+    assert database.get_item(item_id) is None
