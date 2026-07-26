@@ -13,7 +13,7 @@ from carenest.config import format_check_result, inspect_configuration
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="CareNest Bot — персональный Telegram-бот")
+    parser = argparse.ArgumentParser(description="CareNest — персональный Telegram-бот")
     parser.add_argument(
         "--check-config",
         action="store_true",
@@ -61,6 +61,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         logging.info("Остановка по запросу пользователя.")
     except (OSError, RuntimeError, TelegramAPIError) as error:
-        logging.error("CareNest Bot завершён с ошибкой: %s", error)
+        logging.error("CareNest завершён с ошибкой: %s", error)
         return 1
     return 0

@@ -13,11 +13,25 @@
     "minute": 0,
     "timezone": "Europe/Moscow"
   },
+  "compliments": {
+    "enabled": false,
+    "interval_days": 3,
+    "hour": 12,
+    "minute": 0,
+    "timezone": "UTC",
+    "safe_context": [],
+    "local_fallbacks": [
+      "Ты умеешь делать обычный день заметно теплее.",
+      "В тебе есть спокойная сила, которую очень легко ценить."
+    ]
+  },
   "paths": {
     "data": "data",
     "database": "data/wishlist.db",
     "quiz_media": "media/quiz",
-    "support_media": "media/support"
+    "support_media": "media/support",
+    "favorite_media": "media/favorites",
+    "memory_media": "media/memories"
   },
   "quiz": {
     "questions": [

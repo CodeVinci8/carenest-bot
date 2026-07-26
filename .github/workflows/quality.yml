@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "restoration/**"
+      - "feature/**"
   pull_request:
 
 jobs:

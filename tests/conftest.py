@@ -13,6 +13,10 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "HER_ID",
         "CARENEST_CONFIG",
         "CARENEST_DATA_DIR",
+        "CARENEST_PRODUCT_NAME",
+        "AIPRIMETECH_API_KEY",
+        "AIPRIMETECH_BASE_URL",
+        "AIPRIMETECH_MODEL",
     ):
         monkeypatch.delenv(name, raising=False)
 
