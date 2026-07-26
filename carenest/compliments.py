@@ -3,18 +3,19 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from anthropic import (
+from openai import (
     APIConnectionError,
     APIStatusError,
     APITimeoutError,
-    AsyncAnthropic,
+    AsyncOpenAI,
     AuthenticationError,
+    OpenAIError,
     RateLimitError,
 )
 
@@ -23,6 +24,12 @@ from carenest.database import WishlistDatabase
 
 logger = logging.getLogger(__name__)
 SPACE_RE = re.compile(r"\s+")
+
+COMPLIMENT_SYSTEM_PROMPT = (
+    "Напиши по-русски тёплый комплимент из одного или двух естественных "
+    "предложений. Не используй инфантильный или манипулятивный тон, "
+    "сексуальный контент, советы, выдуманные события и упоминания ИИ."
+)
 
 
 class ComplimentProvider(Protocol):
@@ -35,12 +42,27 @@ class ComplimentProviderError(RuntimeError):
         super().__init__(category)
 
 
-class AnthropicComplimentProvider:
+def _normalize_openai_base_url(base_url: str) -> str:
+    """Return an OpenAI-compatible API root (…/v1) for the gateway."""
+    root = base_url.rstrip("/")
+    if root.endswith("/v1") or "/v1/" in root:
+        return root
+    return f"{root}/v1"
+
+
+class OpenAICompatibleComplimentProvider:
+    """Compliment provider for the AI Prime Tech OpenAI-compatible gateway.
+
+    The stored key belongs to the Codex model group (gpt-5.6-luna / -sol / -terra)
+    and speaks the OpenAI Chat Completions protocol. It is not an Anthropic/Claude
+    key, so no Claude model is ever requested here.
+    """
+
     def __init__(self, api_key: str, base_url: str, model: str):
         self.model = model
-        self.client = AsyncAnthropic(
+        self.client = AsyncOpenAI(
             api_key=api_key,
-            base_url=base_url.rstrip("/"),
+            base_url=_normalize_openai_base_url(base_url),
             max_retries=0,
             timeout=12.0,
         )
@@ -48,20 +70,15 @@ class AnthropicComplimentProvider:
     async def generate(self, safe_context: tuple[str, ...]) -> str:
         context = "\n".join(f"- {item}" for item in safe_context) or "- Без личных деталей."
         try:
-            response = await self.client.messages.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=120,
-                temperature=0.8,
-                system=(
-                    "Напиши по-русски тёплый комплимент из одного или двух естественных "
-                    "предложений. Не используй инфантильный или манипулятивный тон, "
-                    "сексуальный контент, советы, выдуманные события и упоминания ИИ."
-                ),
+                max_completion_tokens=256,
                 messages=[
+                    {"role": "system", "content": COMPLIMENT_SYSTEM_PROMPT},
                     {
                         "role": "user",
                         "content": "Разрешённый обезличенный контекст:\n" + context,
-                    }
+                    },
                 ],
             )
         except AuthenticationError as error:
@@ -72,11 +89,13 @@ class AnthropicComplimentProvider:
             raise ComplimentProviderError("timeout") from error
         except (APIConnectionError, APIStatusError) as error:
             raise ComplimentProviderError("provider") from error
+        except OpenAIError as error:
+            raise ComplimentProviderError("provider") from error
         try:
-            text = "".join(
-                block.text for block in response.content if getattr(block, "type", None) == "text"
-            )
-        except (AttributeError, TypeError) as error:
+            choices = response.choices
+            message = choices[0].message
+            text = message.content or ""
+        except (AttributeError, IndexError, KeyError, TypeError) as error:
             raise ComplimentProviderError("malformed") from error
         normalized = normalize_compliment(text)
         if not normalized:
@@ -92,6 +111,21 @@ class ComplimentRunResult:
 
 def normalize_compliment(text: str) -> str:
     return SPACE_RE.sub(" ", text).strip()
+
+
+def initialize_compliment_baseline(
+    database: WishlistDatabase,
+    settings: ComplimentSettings,
+    now: datetime | None = None,
+) -> date:
+    """Persist the interval baseline at application startup.
+
+    The baseline is written once (INSERT-if-absent), so a restart never moves an
+    existing baseline forward and no catch-up compliment is produced.
+    """
+    current = now or datetime.now(tz=ZoneInfo("UTC"))
+    local_date = current.astimezone(ZoneInfo(settings.timezone)).date()
+    return database.ensure_compliment_baseline(local_date)
 
 
 def is_compliment_due(

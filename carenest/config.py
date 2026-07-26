@@ -57,7 +57,7 @@ class ComplimentSettings:
     local_fallbacks: tuple[str, ...] = ("Ты умеешь делать обычный день заметно теплее.",)
     api_key: str | None = None
     base_url: str = "https://aiprimetech.io"
-    model: str = "claude-haiku-4-5"
+    model: str = "gpt-5.6-luna"
 
 
 @dataclass(frozen=True)
@@ -389,7 +389,7 @@ def _parse_compliments(
         local_fallbacks = ["Ты умеешь делать обычный день заметно теплее."]
     api_key = environment.get("AIPRIMETECH_API_KEY")
     base_url = environment.get("AIPRIMETECH_BASE_URL", "https://aiprimetech.io").rstrip("/")
-    model = environment.get("AIPRIMETECH_MODEL", "claude-haiku-4-5").strip()
+    model = environment.get("AIPRIMETECH_MODEL", "gpt-5.6-luna").strip()
     parsed_url = urlparse(base_url)
     if parsed_url.scheme != "https" or not parsed_url.netloc:
         errors.append("AIPRIMETECH_BASE_URL должен быть корректным HTTPS-адресом.")
