@@ -14,6 +14,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from carenest.config import AppConfig, QuizQuestion
 from carenest.filters import AllowedUserFilter
+from carenest.texts import QUIZ_BUTTON
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,23 @@ class QuizCallback(CallbackData, prefix="quiz"):
 
 def format_quiz_question(question: QuizQuestion, question_index: int, total: int) -> str:
     return f"Вопрос {question_index + 1} из {total}\n\n{question.question}"
+
+
+def quiz_answer_result(question: QuizQuestion, answer_index: int) -> tuple[int, str]:
+    score = (
+        question.scores[answer_index] if question.scores else int(answer_index == question.correct)
+    )
+    if question.reactions:
+        reaction = question.reactions[answer_index]
+    elif answer_index == question.correct:
+        reaction = "Точно подмечено."
+    else:
+        reaction = "Смелая версия — идём дальше."
+    return score, reaction
+
+
+def format_quiz_result(score: int, maximum: int, final_message: str) -> str:
+    return f"Результат: {score} из {maximum}.\n\n{final_message}"
 
 
 def validate_quiz_answer(
@@ -134,8 +152,10 @@ def build_quiz_router(config: AppConfig) -> Router:
             return
         session = secrets.token_hex(4)
         await state.set_state(QuizStates.in_progress)
-        await state.set_data({"quiz_session": session, "quiz_index": 0})
+        await state.set_data({"quiz_session": session, "quiz_index": 0, "quiz_score": 0})
         await send_quiz_question(message, config, 0, session)
+
+    router.message.register(quiz_handler, F.text == QUIZ_BUTTON, allowed)
 
     @router.callback_query(QuizCallback.filter(), allowed)
     async def process_quiz_answer(
@@ -164,18 +184,17 @@ def build_quiz_router(config: AppConfig) -> Router:
             return
 
         question = config.questions[question_index]
-        if answer_index != question.correct:
-            await _answer_callback(callback, "Пока неверно. Попробуйте ещё раз.", show_alert=True)
-            return
-        if not await _answer_callback(callback, "Верно! ❤️"):
+        answer_score, reaction = quiz_answer_result(question, answer_index)
+        if not await _answer_callback(callback, reaction):
             return
         if not isinstance(callback.message, Message):
             return
 
         await _delete_quiz_message(callback.message)
+        score = int(state_data.get("quiz_score", 0)) + answer_score
         next_index = question_index + 1
         if next_index < len(config.questions):
-            await state.update_data(quiz_index=next_index)
+            await state.update_data(quiz_index=next_index, quiz_score=score)
             await send_quiz_question(
                 callback.message,
                 config,
@@ -185,7 +204,12 @@ def build_quiz_router(config: AppConfig) -> Router:
         else:
             await state.clear()
             try:
-                await callback.message.answer(config.rendered_final_message())
+                maximum = sum(
+                    max(question.scores) if question.scores else 1 for question in config.questions
+                )
+                await callback.message.answer(
+                    format_quiz_result(score, maximum, config.rendered_final_message())
+                )
             except TelegramAPIError as error:
                 logger.error("Не удалось отправить результат квиза: %s", error)
 

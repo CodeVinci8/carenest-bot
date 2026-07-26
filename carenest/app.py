@@ -8,6 +8,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 
+from carenest.compliments import AnthropicComplimentProvider
 from carenest.config import AppConfig
 from carenest.database import WishlistDatabase
 from carenest.handlers import (
@@ -41,7 +42,7 @@ def build_dispatcher(config: AppConfig, database: WishlistDatabase) -> Dispatche
     dispatcher.include_router(build_start_router(config))
     dispatcher.include_router(build_info_router(config))
     dispatcher.include_router(build_quiz_router(config))
-    dispatcher.include_router(build_mood_router(config))
+    dispatcher.include_router(build_mood_router(config, database))
     dispatcher.include_router(build_relationship_router(config))
     dispatcher.include_router(build_wishlist_router(config, database))
     return dispatcher
@@ -53,7 +54,7 @@ async def set_main_menu(bot: Bot) -> None:
 
 
 async def run_bot(config: AppConfig) -> None:
-    logger.info("Запуск CareNest Bot %s.", __version__)
+    logger.info("Запуск %s %s.", config.product_name, __version__)
     database = WishlistDatabase(config.paths.database)
     logger.info("Подготовка локальной базы данных.")
     try:
@@ -67,15 +68,22 @@ async def run_bot(config: AppConfig) -> None:
 
     bot = Bot(token=config.token)
     dispatcher = build_dispatcher(config, database)
-    scheduler = build_scheduler(config, bot)
+    compliment_provider = None
+    if config.compliments.enabled and config.compliments.api_key:
+        compliment_provider = AnthropicComplimentProvider(
+            config.compliments.api_key,
+            config.compliments.base_url,
+            config.compliments.model,
+        )
+    scheduler = build_scheduler(config, bot, database, compliment_provider)
     try:
         await set_main_menu(bot)
         if scheduler is not None:
             scheduler.start()
-            logger.info("Планировщик утренних сообщений запущен.")
+            logger.info("Планировщик CareNest запущен.")
         else:
-            logger.info("Планировщик утренних сообщений выключен.")
-        logger.info("CareNest Bot запущен.")
+            logger.info("Планировщик CareNest выключен.")
+        logger.info("%s запущен.", config.product_name)
         await dispatcher.start_polling(bot, close_bot_session=False)
     except TelegramAPIError as error:
         logger.error("Ошибка Telegram при работе бота: %s", error)
@@ -85,4 +93,4 @@ async def run_bot(config: AppConfig) -> None:
             scheduler.shutdown(wait=False)
             logger.info("Планировщик остановлен.")
         await bot.session.close()
-        logger.info("Сессия Telegram закрыта. CareNest Bot остановлен.")
+        logger.info("Сессия Telegram закрыта. %s остановлен.", config.product_name)

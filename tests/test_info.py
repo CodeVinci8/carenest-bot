@@ -25,5 +25,5 @@ def test_about_contains_name_and_current_version() -> None:
     text = about_text()
 
     assert "CareNest Bot" in text
-    assert __version__ == "1.1.0"
-    assert "Версия 1.1.0" in text
+    assert __version__ == "1.2.0"
+    assert "Версия 1.2.0" in text

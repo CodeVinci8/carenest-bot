@@ -5,6 +5,23 @@ import pytest
 from carenest.config import inspect_configuration
 
 
+def test_example_check_ignores_private_config_path(
+    tmp_path, monkeypatch, clean_environment
+) -> None:
+    example = tmp_path / "config" / "personalization.example.json"
+    example.parent.mkdir(parents=True)
+    example.write_text('{"quiz": {"questions": []}}', encoding="utf-8")
+    monkeypatch.setenv("CARENEST_CONFIG", "private/missing.json")
+
+    result = inspect_configuration(
+        project_root=tmp_path,
+        require_secrets=False,
+        example=True,
+    )
+
+    assert result.config.paths.config_file == example.resolve()
+
+
 def set_required_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TELEGRAM_TOKEN", "123456:abcdefghijklmnopqrstuvwxyz_ABCDE")
     monkeypatch.setenv("ALLOWED_IDS", "101, 202")

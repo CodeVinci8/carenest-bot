@@ -28,3 +28,8 @@ quiz_data.py
 media/
 cute_photos/
 photos/
+runtime/
+*.db
+*.sqlite
+*.sqlite3
+*.log

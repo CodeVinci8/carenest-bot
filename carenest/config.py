@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import dotenv_values
@@ -33,6 +34,8 @@ class QuizQuestion:
     options: tuple[str, ...]
     correct: int
     photo: str | None = None
+    reactions: tuple[str, ...] = ()
+    scores: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,20 @@ class SchedulerSettings:
 
 
 @dataclass(frozen=True)
+class ComplimentSettings:
+    enabled: bool = False
+    interval_days: int = 3
+    hour: int = 12
+    minute: int = 0
+    timezone: str = "UTC"
+    safe_context: tuple[str, ...] = ()
+    local_fallbacks: tuple[str, ...] = ("Ты умеешь делать обычный день заметно теплее.",)
+    api_key: str | None = None
+    base_url: str = "https://aiprimetech.io"
+    model: str = "claude-haiku-4-5"
+
+
+@dataclass(frozen=True)
 class RuntimePaths:
     project_root: Path
     config_file: Path
@@ -51,10 +68,13 @@ class RuntimePaths:
     database: Path
     quiz_media: Path
     support_media: Path
+    favorite_media: Path
+    memory_media: Path
 
 
 @dataclass(frozen=True)
 class AppConfig:
+    product_name: str
     token: str | None
     allowed_ids: frozenset[int]
     recipient_id: int | None
@@ -66,6 +86,7 @@ class AppConfig:
     morning_messages: tuple[str, ...]
     questions: tuple[QuizQuestion, ...]
     scheduler: SchedulerSettings
+    compliments: ComplimentSettings
     paths: RuntimePaths
 
     def rendered_final_message(self) -> str:
@@ -194,6 +215,8 @@ def _parse_questions(raw_questions: Any, errors: list[str]) -> tuple[QuizQuestio
         options = raw.get("options")
         correct = raw.get("correct")
         photo = raw.get("photo")
+        reactions = raw.get("reactions", [])
+        scores = raw.get("scores", [])
         valid = True
 
         if not isinstance(text, str) or not text.strip():
@@ -228,7 +251,22 @@ def _parse_questions(raw_questions: Any, errors: list[str]) -> tuple[QuizQuestio
             elif Path(photo).is_absolute() or ".." in Path(photo).parts:
                 errors.append(f"{prefix}: photo должен быть безопасным относительным путём.")
                 valid = False
-
+        if reactions and (
+            not isinstance(reactions, list)
+            or not isinstance(options, list)
+            or len(reactions) != len(options)
+            or any(not isinstance(item, str) or not item.strip() for item in reactions)
+        ):
+            errors.append(f"{prefix}: reactions должен соответствовать вариантам ответа.")
+            valid = False
+        if scores and (
+            not isinstance(scores, list)
+            or not isinstance(options, list)
+            or len(scores) != len(options)
+            or any(not isinstance(item, int) or isinstance(item, bool) for item in scores)
+        ):
+            errors.append(f"{prefix}: scores должен содержать целое число для каждого ответа.")
+            valid = False
         if valid:
             questions.append(
                 QuizQuestion(
@@ -236,6 +274,8 @@ def _parse_questions(raw_questions: Any, errors: list[str]) -> tuple[QuizQuestio
                     options=tuple(option.strip() for option in options),
                     correct=correct,
                     photo=photo.strip() if isinstance(photo, str) else None,
+                    reactions=tuple(item.strip() for item in reactions) if reactions else (),
+                    scores=tuple(scores) if scores else (),
                 )
             )
     return tuple(questions)
@@ -287,6 +327,90 @@ def _parse_scheduler(raw: Any, errors: list[str]) -> SchedulerSettings:
     return SchedulerSettings(enabled=enabled, hour=hour, minute=minute, timezone=timezone)
 
 
+def _parse_compliments(
+    raw: Any,
+    environment: dict[str, str],
+    errors: list[str],
+) -> ComplimentSettings:
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        errors.append("compliments должен быть объектом.")
+        raw = {}
+    enabled = raw.get("enabled", False)
+    interval_days = raw.get("interval_days", 3)
+    hour = raw.get("hour", 12)
+    minute = raw.get("minute", 0)
+    timezone = raw.get("timezone", "UTC")
+    safe_context = raw.get("safe_context", [])
+    local_fallbacks = raw.get(
+        "local_fallbacks",
+        ["Ты умеешь делать обычный день заметно теплее."],
+    )
+    if not isinstance(enabled, bool):
+        errors.append("compliments.enabled должен быть true или false.")
+        enabled = False
+    if (
+        not isinstance(interval_days, int)
+        or isinstance(interval_days, bool)
+        or not 1 <= interval_days <= 365
+    ):
+        errors.append("compliments.interval_days должен быть целым числом от 1 до 365.")
+        interval_days = 3
+    if not isinstance(hour, int) or isinstance(hour, bool) or not 0 <= hour <= 23:
+        errors.append("compliments.hour должен быть целым числом от 0 до 23.")
+        hour = 12
+    if not isinstance(minute, int) or isinstance(minute, bool) or not 0 <= minute <= 59:
+        errors.append("compliments.minute должен быть целым числом от 0 до 59.")
+        minute = 0
+    if not isinstance(timezone, str) or not timezone.strip():
+        errors.append("compliments.timezone должен содержать имя часового пояса IANA.")
+        timezone = "UTC"
+    else:
+        try:
+            ZoneInfo(timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            errors.append(f"Неизвестный часовой пояс IANA для compliments: {timezone}.")
+    if not isinstance(safe_context, list) or any(
+        not isinstance(item, str) or not item.strip() or len(item.strip()) > 200
+        for item in safe_context
+    ):
+        errors.append("compliments.safe_context должен быть списком коротких непустых строк.")
+        safe_context = []
+    if (
+        not isinstance(local_fallbacks, list)
+        or not local_fallbacks
+        or any(
+            not isinstance(item, str) or not item.strip() or len(item.strip()) > 500
+            for item in local_fallbacks
+        )
+    ):
+        errors.append("compliments.local_fallbacks должен содержать хотя бы одну короткую строку.")
+        local_fallbacks = ["Ты умеешь делать обычный день заметно теплее."]
+    api_key = environment.get("AIPRIMETECH_API_KEY")
+    base_url = environment.get("AIPRIMETECH_BASE_URL", "https://aiprimetech.io").rstrip("/")
+    model = environment.get("AIPRIMETECH_MODEL", "claude-haiku-4-5").strip()
+    parsed_url = urlparse(base_url)
+    if parsed_url.scheme != "https" or not parsed_url.netloc:
+        errors.append("AIPRIMETECH_BASE_URL должен быть корректным HTTPS-адресом.")
+    if not model or any(character.isspace() for character in model):
+        errors.append("AIPRIMETECH_MODEL должен содержать один идентификатор модели.")
+    if enabled and not api_key:
+        errors.append("Для включённых AI-комплиментов требуется AIPRIMETECH_API_KEY.")
+    return ComplimentSettings(
+        enabled=enabled,
+        interval_days=interval_days,
+        hour=hour,
+        minute=minute,
+        timezone=timezone,
+        safe_context=tuple(item.strip() for item in safe_context),
+        local_fallbacks=tuple(item.strip() for item in local_fallbacks),
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+    )
+
+
 def inspect_configuration(
     *,
     project_root: Path = DEFAULT_PROJECT_ROOT,
@@ -299,13 +423,17 @@ def inspect_configuration(
     errors: list[str] = []
     warnings: list[str] = []
     environment = _load_environment(project_root, env_file)
+    product_name = environment.get("CARENEST_PRODUCT_NAME", "CareNest Bot").strip()
+    if not product_name or len(product_name) > 80:
+        errors.append("CARENEST_PRODUCT_NAME должен содержать от 1 до 80 символов.")
+        product_name = "CareNest Bot"
 
-    configured_path = config_file or Path(
-        environment.get(
-            "CARENEST_CONFIG",
-            "config/personalization.example.json" if example else "config/personalization.json",
-        )
-    )
+    if config_file is not None:
+        configured_path = config_file
+    elif example:
+        configured_path = Path("config/personalization.example.json")
+    else:
+        configured_path = Path(environment.get("CARENEST_CONFIG", "config/personalization.json"))
     resolved_config_file = _resolve_path(project_root, configured_path)
     raw = _load_json(resolved_config_file, errors, warnings)
 
@@ -339,6 +467,11 @@ def inspect_configuration(
     database = _resolve_path(project_root, paths_raw.get("database", data_dir / "wishlist.db"))
     quiz_media = _resolve_path(project_root, paths_raw.get("quiz_media", "media/quiz"))
     support_media = _resolve_path(project_root, paths_raw.get("support_media", "media/support"))
+    favorite_media = _resolve_path(
+        project_root,
+        paths_raw.get("favorite_media", paths_raw.get("support_media", "media/support")),
+    )
+    memory_media = _resolve_path(project_root, paths_raw.get("memory_media", "media/memories"))
 
     legacy_database = project_root / "wishlist.db"
     if not database.exists() and legacy_database.is_file():
@@ -363,6 +496,12 @@ def inspect_configuration(
         warnings.append("Путь к фотографиям квиза не является папкой; будет использован текст.")
     if support_media.exists() and not support_media.is_dir():
         warnings.append("Путь к фотографиям поддержки не является папкой; будет использован текст.")
+    for label, directory in (
+        ("любимых фотографий", favorite_media),
+        ("случайных воспоминаний", memory_media),
+    ):
+        if directory.exists() and not directory.is_dir():
+            warnings.append(f"Путь к папке {label} некорректен; будет использован текст.")
 
     quiz_raw = raw.get("quiz", {})
     if quiz_raw is None:
@@ -381,6 +520,7 @@ def inspect_configuration(
     questions = _parse_questions(raw_questions, errors)
 
     scheduler = _parse_scheduler(raw.get("scheduler"), errors)
+    compliments = _parse_compliments(raw.get("compliments"), environment, errors)
     morning_raw = raw.get("morning_messages", [])
     if not isinstance(morning_raw, list) or any(
         not isinstance(message, str) or not message.strip() for message in morning_raw
@@ -399,6 +539,10 @@ def inspect_configuration(
         errors.append("Для включённого планировщика требуется RECIPIENT_ID.")
     if scheduler.enabled and not morning_messages:
         errors.append("Для включённого планировщика нужен хотя бы один текст morning_messages.")
+    if recipient_id is not None and allowed_ids and recipient_id not in allowed_ids:
+        errors.append("RECIPIENT_ID должен входить в ALLOWED_IDS.")
+    if compliments.enabled and recipient_id is None:
+        errors.append("Для включённых AI-комплиментов требуется RECIPIENT_ID.")
 
     relationship_date = _parse_date(raw.get("relationship_start_date"), errors)
     if relationship_date is None:
@@ -447,6 +591,17 @@ def inspect_configuration(
             )
     if not support_media.is_dir():
         warnings.append("Папка с фотографиями поддержки не найдена; будет использован текст.")
+    for label, directory in (
+        ("любимых фотографий", favorite_media),
+        ("случайных воспоминаний", memory_media),
+    ):
+        if not directory.is_dir():
+            warnings.append(f"Папка {label} не найдена; будет использован текст.")
+    writable_parent = database.parent
+    while not writable_parent.exists() and writable_parent != writable_parent.parent:
+        writable_parent = writable_parent.parent
+    if not writable_parent.is_dir() or not os.access(writable_parent, os.W_OK):
+        errors.append("Папка данных или её ближайший родитель недоступны для записи.")
     if not questions:
         warnings.append("В квизе нет вопросов; команда /quiz сообщит об этом пользователю.")
 
@@ -457,8 +612,11 @@ def inspect_configuration(
         database=database,
         quiz_media=quiz_media,
         support_media=support_media,
+        favorite_media=favorite_media,
+        memory_media=memory_media,
     )
     config = AppConfig(
+        product_name=product_name,
         token=token,
         allowed_ids=allowed_ids,
         recipient_id=recipient_id,
@@ -470,6 +628,7 @@ def inspect_configuration(
         morning_messages=morning_messages,
         questions=questions,
         scheduler=scheduler,
+        compliments=compliments,
         paths=paths,
     )
     return ConfigCheckResult(config=config, errors=errors, warnings=warnings)
@@ -483,7 +642,8 @@ def load_configuration(**kwargs: Any) -> AppConfig:
 
 
 def format_check_result(result: ConfigCheckResult) -> str:
-    lines = ["Проверка конфигурации CareNest Bot"]
+    product_name = result.config.product_name if result.config else "CareNest"
+    lines = [f"Проверка конфигурации {product_name}"]
     if result.config is not None:
         config = result.config
         lines.extend(
@@ -497,6 +657,14 @@ def format_check_result(result: ConfigCheckResult) -> str:
                     f"({config.scheduler.timezone})"
                     if config.scheduler.enabled
                     else "Планировщик: выключен"
+                ),
+                (
+                    "Комплименты: включены, "
+                    f"раз в {config.compliments.interval_days} дн., "
+                    f"{config.compliments.hour:02d}:{config.compliments.minute:02d} "
+                    f"({config.compliments.timezone})"
+                    if config.compliments.enabled
+                    else "Комплименты: выключены"
                 ),
             ]
         )
