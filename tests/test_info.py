@@ -10,13 +10,15 @@ def test_help_mentions_registered_real_commands() -> None:
         "start",
         "quiz",
         "mood",
-        "days",
+        "favorite",
         "wish",
         "wishlist",
         "cancel",
         "help",
         "about",
     }
+    # The public bot must not expose the relationship counter.
+    assert "days" not in registered
     for command in registered:
         assert f"/{command}" in HELP_TEXT or command == "about"
 
@@ -25,5 +27,5 @@ def test_about_contains_name_and_current_version() -> None:
     text = about_text()
 
     assert "CareNest Bot" in text
-    assert __version__ == "1.2.0"
-    assert "Версия 1.2.0" in text
+    assert __version__ == "1.2.2"
+    assert "версия 1.2.2" in text

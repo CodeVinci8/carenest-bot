@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "aiogram>=3.22,<4",
     "APScheduler>=3.11,<4",
-    "anthropic>=0.69,<1",
+    "openai>=1.40,<3",
     "Pillow>=11.3,<13",
     "python-dotenv>=1.1,<2",
     "tzdata>=2025.2; platform_system == 'Windows'",

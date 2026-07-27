@@ -10,16 +10,16 @@ from carenest.texts import ABOUT_BUTTON, HELP_BUTTON
 
 def help_text(product_name: str = "CareNest Bot") -> str:
     return (
-        f"Команды {product_name}:\n"
-        "/start — открыть главное меню;\n"
-        "/quiz — начать или перезапустить личный квиз;\n"
-        "/mood — открыть случайное воспоминание;\n"
-        "/days — узнать, сколько дней вы вместе;\n"
-        "/wish — добавить желание;\n"
-        "/wishlist — открыть список и удалить выбранное желание;\n"
-        "/cancel — отменить ввод желания;\n"
-        "/help — показать эту справку;\n"
-        "/about — узнать о проекте."
+        f"вот что умеет {product_name}:\n"
+        "/start — вернуться в меню;\n"
+        "/quiz — сыграем в квиз;\n"
+        "/mood — случайный тёплый момент;\n"
+        "/favorite — любимое фото;\n"
+        "/wish — загадать желание;\n"
+        "/wishlist — открыть вишлист и убрать лишнее;\n"
+        "/cancel — отменить желание;\n"
+        "/help — показать это ещё раз;\n"
+        "/about — пару слов о боте."
     )
 
 
@@ -27,11 +27,7 @@ HELP_TEXT = help_text()
 
 
 def about_text(product_name: str = "CareNest Bot") -> str:
-    return (
-        f"{product_name}\n"
-        "Небольшой персональный Telegram-бот о заботе и внимании.\n"
-        f"Версия {__version__}."
-    )
+    return f"{product_name}\nмаленький бот про заботу и тёплые моменты 💛\nверсия {__version__}."
 
 
 def build_info_router(config: AppConfig) -> Router:

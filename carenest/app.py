@@ -8,14 +8,16 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 
-from carenest.compliments import AnthropicComplimentProvider
+from carenest.compliments import (
+    OpenAICompatibleComplimentProvider,
+    initialize_compliment_baseline,
+)
 from carenest.config import AppConfig
 from carenest.database import WishlistDatabase
 from carenest.handlers import (
     build_info_router,
     build_mood_router,
     build_quiz_router,
-    build_relationship_router,
     build_start_router,
     build_wishlist_router,
 )
@@ -25,15 +27,15 @@ from carenest.version import __version__
 logger = logging.getLogger(__name__)
 
 BOT_COMMANDS = (
-    BotCommand(command="start", description="Открыть главное меню"),
-    BotCommand(command="quiz", description="Начать личный квиз"),
-    BotCommand(command="mood", description="Поднять настроение"),
-    BotCommand(command="days", description="Посчитать дни вместе"),
-    BotCommand(command="wish", description="Добавить желание"),
-    BotCommand(command="wishlist", description="Показать список желаний"),
-    BotCommand(command="cancel", description="Отменить ввод желания"),
-    BotCommand(command="help", description="Показать справку"),
-    BotCommand(command="about", description="О проекте"),
+    BotCommand(command="start", description="открыть меню"),
+    BotCommand(command="quiz", description="сыграем в квиз"),
+    BotCommand(command="mood", description="случайный момент"),
+    BotCommand(command="favorite", description="любимое фото"),
+    BotCommand(command="wish", description="загадать желание"),
+    BotCommand(command="wishlist", description="мой вишлист"),
+    BotCommand(command="cancel", description="отменить"),
+    BotCommand(command="help", description="что я умею"),
+    BotCommand(command="about", description="о боте"),
 )
 
 
@@ -43,7 +45,6 @@ def build_dispatcher(config: AppConfig, database: WishlistDatabase) -> Dispatche
     dispatcher.include_router(build_info_router(config))
     dispatcher.include_router(build_quiz_router(config))
     dispatcher.include_router(build_mood_router(config, database))
-    dispatcher.include_router(build_relationship_router(config))
     dispatcher.include_router(build_wishlist_router(config, database))
     return dispatcher
 
@@ -53,12 +54,26 @@ async def set_main_menu(bot: Bot) -> None:
     logger.info("Команды Telegram зарегистрированы.")
 
 
+def prepare_database(config: AppConfig) -> WishlistDatabase:
+    """Create and initialize the runtime database (the real startup path).
+
+    When compliments are enabled the three-day interval baseline is persisted
+    here, at startup, rather than on the first cron occurrence. Because the
+    baseline is written only if absent, restarts never move it forward and no
+    startup or catch-up compliment is triggered.
+    """
+    database = WishlistDatabase(config.paths.database)
+    database.initialize()
+    if config.compliments.enabled:
+        initialize_compliment_baseline(database, config.compliments)
+    return database
+
+
 async def run_bot(config: AppConfig) -> None:
     logger.info("Запуск %s %s.", config.product_name, __version__)
-    database = WishlistDatabase(config.paths.database)
     logger.info("Подготовка локальной базы данных.")
     try:
-        database.initialize()
+        database = prepare_database(config)
     except (OSError, sqlite3.Error) as error:
         raise RuntimeError(f"Не удалось подготовить локальную базу данных: {error}") from error
     logger.info("Локальная база данных готова.")
@@ -70,7 +85,7 @@ async def run_bot(config: AppConfig) -> None:
     dispatcher = build_dispatcher(config, database)
     compliment_provider = None
     if config.compliments.enabled and config.compliments.api_key:
-        compliment_provider = AnthropicComplimentProvider(
+        compliment_provider = OpenAICompatibleComplimentProvider(
             config.compliments.api_key,
             config.compliments.base_url,
             config.compliments.model,

@@ -29,7 +29,7 @@ class FakeMessage:
 def test_quiz_progress_text() -> None:
     question = QuizQuestion(question="Тест?", options=("Да", "Нет"), correct=0)
 
-    assert format_quiz_question(question, 1, 5) == "Вопрос 2 из 5\n\nТест?"
+    assert format_quiz_question(question, 1, 5) == "вопрос 2 из 5\n\nТест?"
 
 
 @pytest.mark.asyncio
@@ -47,16 +47,16 @@ async def test_text_only_quiz_question_does_not_try_to_send_photo(
 
     assert sent is True
     assert message.photo_calls == 0
-    assert message.answers == ["Вопрос 1 из 1\n\nТекстовый вопрос?"]
+    assert message.answers == ["вопрос 1 из 1\n\nТекстовый вопрос?"]
 
 
 @pytest.mark.parametrize(
     ("question_index", "answer_index", "expected"),
     [
-        (-1, 0, "Этот вопрос больше недоступен."),
-        (2, 0, "Этот вопрос больше недоступен."),
-        (0, -1, "Такого варианта ответа нет."),
-        (0, 4, "Такого варианта ответа нет."),
+        (-1, 0, "этот вопрос уже неактуален"),
+        (2, 0, "этот вопрос уже неактуален"),
+        (0, -1, "такого варианта нет"),
+        (0, 4, "такого варианта нет"),
     ],
 )
 def test_invalid_quiz_callback_indexes(

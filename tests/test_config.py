@@ -4,6 +4,25 @@ import pytest
 
 from carenest.config import inspect_configuration
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_shipped_example_quiz_is_neutral_five_round_demo(clean_environment: None) -> None:
+    result = inspect_configuration(
+        project_root=REPO_ROOT,
+        require_secrets=False,
+        example=True,
+    )
+
+    assert result.ok, result.errors
+    questions = result.config.questions
+    # Demo-ready public quiz: five rounds, four answers each, no private photos.
+    assert len(questions) == 5
+    for question in questions:
+        assert len(question.options) == 4
+        assert question.photo is None
+        assert 0 <= question.correct < 4
+
 
 def test_example_check_ignores_private_config_path(
     tmp_path, monkeypatch, clean_environment

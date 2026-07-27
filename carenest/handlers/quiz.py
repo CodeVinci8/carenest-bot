@@ -30,7 +30,7 @@ class QuizCallback(CallbackData, prefix="quiz"):
 
 
 def format_quiz_question(question: QuizQuestion, question_index: int, total: int) -> str:
-    return f"Вопрос {question_index + 1} из {total}\n\n{question.question}"
+    return f"вопрос {question_index + 1} из {total}\n\n{question.question}"
 
 
 def quiz_answer_result(question: QuizQuestion, answer_index: int) -> tuple[int, str]:
@@ -40,14 +40,14 @@ def quiz_answer_result(question: QuizQuestion, answer_index: int) -> tuple[int, 
     if question.reactions:
         reaction = question.reactions[answer_index]
     elif answer_index == question.correct:
-        reaction = "Точно подмечено."
+        reaction = "о, в точку"
     else:
-        reaction = "Смелая версия — идём дальше."
+        reaction = "смелая версия, идём дальше"
     return score, reaction
 
 
 def format_quiz_result(score: int, maximum: int, final_message: str) -> str:
-    return f"Результат: {score} из {maximum}.\n\n{final_message}"
+    return f"итог: {score} из {maximum}\n\n{final_message}"
 
 
 def validate_quiz_answer(
@@ -56,9 +56,9 @@ def validate_quiz_answer(
     answer_index: int,
 ) -> str | None:
     if not 0 <= question_index < len(questions):
-        return "Этот вопрос больше недоступен."
+        return "этот вопрос уже неактуален"
     if not 0 <= answer_index < len(questions[question_index].options):
-        return "Такого варианта ответа нет."
+        return "такого варианта нет"
     return None
 
 
@@ -148,7 +148,7 @@ def build_quiz_router(config: AppConfig) -> Router:
     async def quiz_handler(message: Message, state: FSMContext) -> None:
         if not config.questions:
             await state.clear()
-            await message.answer("В квизе пока нет вопросов. Добавьте их в конфигурацию.")
+            await message.answer("вопросов для квиза пока нет")
             return
         session = secrets.token_hex(4)
         await state.set_state(QuizStates.in_progress)
@@ -178,7 +178,7 @@ def build_quiz_router(config: AppConfig) -> Router:
         ):
             await _answer_callback(
                 callback,
-                "Эта кнопка устарела. Запустите квиз командой /quiz.",
+                "кнопка устарела, запусти квиз заново — /quiz",
                 show_alert=True,
             )
             return
@@ -217,7 +217,7 @@ def build_quiz_router(config: AppConfig) -> Router:
     async def malformed_quiz_callback(callback: CallbackQuery) -> None:
         await _answer_callback(
             callback,
-            "Некорректная или устаревшая кнопка квиза.",
+            "кнопка не сработала, попробуй /quiz",
             show_alert=True,
         )
 
