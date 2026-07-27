@@ -73,18 +73,26 @@ async def test_successful_generation_parses_choice_content() -> None:
 
 
 @pytest.mark.asyncio
-async def test_only_safe_context_reaches_provider() -> None:
+async def test_allowed_profile_reaches_request_and_forbidden_does_not() -> None:
     provider = _make_provider()
     fake = _FakeCompletions(result=_completion("Комплимент."))
     _install_fake(provider, fake)
 
-    await provider.generate(("Ценит внимательность.",))
+    # safe_context + the approved depersonalised profile are the only inputs.
+    await provider.generate(
+        ("Ценит внимательность.",),
+        ("Любит настольные игры.", "Тёплый, спокойный тон."),
+    )
 
     messages = fake.calls[0]["messages"]
     user_message = messages[-1]["content"]
+    # Both the safe context and every approved profile trait reach the request.
     assert "Ценит внимательность." in user_message
-    # No personal identifiers, ids, dates or secrets are ever added by the provider.
-    for forbidden in ("test-key", "@", "id=", "http"):
+    assert "Любит настольные игры." in user_message
+    assert "Тёплый, спокойный тон." in user_message
+    # Forbidden private data is never added by the provider: no name, ids, dates,
+    # secrets, urls or media filenames.
+    for forbidden in ("test-key", "@", "id=", "http", ".jpg", ".png", "2020-", "Настя"):
         assert forbidden not in user_message
 
 

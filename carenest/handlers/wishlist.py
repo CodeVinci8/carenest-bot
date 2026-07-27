@@ -97,7 +97,7 @@ def get_wishlist_keyboard(items: Sequence[tuple[int, str]]):
     builder = InlineKeyboardBuilder()
     for item_id, name in items:
         builder.button(
-            text=f"Удалить #{item_id}",
+            text=f"убрать #{item_id}",
             callback_data=WishlistCallback(
                 action="ask",
                 item_id=item_id,
@@ -113,7 +113,7 @@ def get_confirmation_keyboard(item_id: int, fingerprint: str):
         markup=[
             [
                 InlineKeyboardButton(
-                    text="Удалить",
+                    text="убрать",
                     callback_data=WishlistCallback(
                         action="confirm",
                         item_id=item_id,
@@ -121,7 +121,7 @@ def get_confirmation_keyboard(item_id: int, fingerprint: str):
                     ).pack(),
                 ),
                 InlineKeyboardButton(
-                    text="Отмена",
+                    text="отмена",
                     callback_data=WishlistCallback(
                         action="cancel",
                         item_id=item_id,
@@ -135,7 +135,7 @@ def get_confirmation_keyboard(item_id: int, fingerprint: str):
 
 async def cancel_wishlist_input(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer("Добавление желания отменено.")
+    await message.answer("окей, отменил")
 
 
 async def _answer_callback(
@@ -166,45 +166,43 @@ def build_wishlist_router(config: AppConfig, database: WishlistDatabase) -> Rout
     async def add_item_start(message: Message, state: FSMContext) -> None:
         await state.set_state(WishlistStates.waiting_for_item)
         await message.answer(
-            "Напишите желание одним сообщением. Допустимо до "
-            f"{MAX_WISHLIST_ITEM_LENGTH} символов. Для отмены используйте /cancel."
+            "напиши желание одним сообщением (до "
+            f"{MAX_WISHLIST_ITEM_LENGTH} символов). передумаешь — /cancel"
         )
 
     async def save_item(message: Message, state: FSMContext) -> None:
         item_name = normalize_wishlist_item(message.text or "")
         if not item_name:
-            await message.answer("Желание не может быть пустым. Напишите его текстом.")
+            await message.answer("желание не может быть пустым, напиши текстом")
             return
         if len(item_name) > MAX_WISHLIST_ITEM_LENGTH:
-            await message.answer(
-                f"Слишком длинный текст. Сократите его до {MAX_WISHLIST_ITEM_LENGTH} символов."
-            )
+            await message.answer(f"многовато букв, уложись в {MAX_WISHLIST_ITEM_LENGTH} символов")
             return
         try:
             database.add_item(item_name)
         except sqlite3.Error as error:
             logger.error("Не удалось сохранить желание в базе данных: %s", error)
-            await message.answer("Не удалось сохранить желание. Попробуйте немного позже.")
+            await message.answer("не получилось сохранить, попробуй чуть позже")
             return
         await state.clear()
-        await message.answer("Желание сохранено. ✨")
+        await message.answer("записал! ✨")
 
     async def wrong_item_content(message: Message) -> None:
-        await message.answer("Пожалуйста, отправьте желание обычным текстом или нажмите /cancel.")
+        await message.answer("отправь желание обычным текстом или жми /cancel")
 
     async def show_wishlist(message: Message) -> None:
         try:
             items = database.get_items()
         except sqlite3.Error as error:
             logger.error("Не удалось прочитать список желаний: %s", error)
-            await message.answer("Не удалось открыть список. Попробуйте немного позже.")
+            await message.answer("не получилось открыть список, попробуй чуть позже")
             return
         if not items:
-            await message.answer("Список желаний пока пуст.")
+            await message.answer("в вишлисте пока пусто")
             return
         chunks = split_wishlist(items)
         for chunk_index, chunk in enumerate(chunks):
-            title = "Список желаний 📝" if chunk_index == 0 else "Продолжение списка 📝"
+            title = "твой вишлист 📝" if chunk_index == 0 else "ещё желания 📝"
             lines = [f"#{item_id} — {display_wishlist_item(name)}" for item_id, name in chunk]
             await message.answer(
                 title + "\n\n" + "\n".join(lines),
@@ -219,11 +217,11 @@ def build_wishlist_router(config: AppConfig, database: WishlistDatabase) -> Rout
         item_id = callback_data.item_id
         fingerprint = callback_data.fingerprint
         if action == "cancel":
-            await _answer_callback(callback, "Удаление отменено.")
-            await _replace_callback_message(callback, "Удаление желания отменено.")
+            await _answer_callback(callback, "не убираю")
+            await _replace_callback_message(callback, "оставил как есть")
             return
         if action not in {"ask", "confirm"} or item_id <= 0:
-            await _answer_callback(callback, "Некорректная кнопка.", show_alert=True)
+            await _answer_callback(callback, "кнопка не сработала", show_alert=True)
             return
 
         try:
@@ -234,40 +232,38 @@ def build_wishlist_router(config: AppConfig, database: WishlistDatabase) -> Rout
                 name = None
         except sqlite3.Error as error:
             logger.error("Ошибка базы данных при удалении желания: %s", error)
-            await _answer_callback(callback, "Не удалось изменить список.", show_alert=True)
+            await _answer_callback(callback, "не получилось изменить список", show_alert=True)
             return
 
         if result == "missing":
-            await _answer_callback(
-                callback, "Это желание уже удалено или не найдено.", show_alert=True
-            )
-            await _replace_callback_message(callback, "Желание уже удалено или не найдено.")
+            await _answer_callback(callback, "этого желания уже нет", show_alert=True)
+            await _replace_callback_message(callback, "этого желания уже нет")
             return
         if result == "stale":
             await _answer_callback(
-                callback, "Кнопка устарела. Откройте список снова.", show_alert=True
+                callback, "кнопка устарела, открой список заново", show_alert=True
             )
             return
         if action == "ask" and name is not None:
-            await _answer_callback(callback, "Подтвердите удаление.")
+            await _answer_callback(callback, "точно убрать?")
             if isinstance(callback.message, Message):
                 try:
                     await callback.message.answer(
-                        f"Удалить желание #{item_id}: «{display_wishlist_item(name)}»?",
+                        f"убрать желание #{item_id}: «{display_wishlist_item(name)}»?",
                         reply_markup=get_confirmation_keyboard(item_id, fingerprint),
                     )
                 except TelegramAPIError as error:
                     logger.warning("Не удалось показать подтверждение удаления: %s", error)
             return
 
-        await _answer_callback(callback, "Желание удалено.")
-        await _replace_callback_message(callback, f"Желание #{item_id} удалено.")
+        await _answer_callback(callback, "готово, убрал")
+        await _replace_callback_message(callback, f"желание #{item_id} убрано")
 
     async def malformed_callback(callback: CallbackQuery) -> None:
-        await _answer_callback(callback, "Некорректная или устаревшая кнопка.", show_alert=True)
+        await _answer_callback(callback, "кнопка не сработала", show_alert=True)
 
     async def cancel_without_input(message: Message) -> None:
-        await message.answer("Сейчас нет активного ввода желания.")
+        await message.answer("сейчас нечего отменять")
 
     router.message.register(add_item_start, Command("wish"), allowed)
     router.message.register(add_item_start, F.text == ADD_WISH_BUTTON, allowed)

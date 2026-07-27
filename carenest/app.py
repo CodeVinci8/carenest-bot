@@ -18,7 +18,6 @@ from carenest.handlers import (
     build_info_router,
     build_mood_router,
     build_quiz_router,
-    build_relationship_router,
     build_start_router,
     build_wishlist_router,
 )
@@ -28,16 +27,15 @@ from carenest.version import __version__
 logger = logging.getLogger(__name__)
 
 BOT_COMMANDS = (
-    BotCommand(command="start", description="Открыть главное меню"),
-    BotCommand(command="quiz", description="Начать личный квиз"),
-    BotCommand(command="mood", description="Случайное воспоминание"),
-    BotCommand(command="favorite", description="Любимое фото"),
-    BotCommand(command="days", description="Посчитать дни вместе"),
-    BotCommand(command="wish", description="Добавить желание"),
-    BotCommand(command="wishlist", description="Показать список желаний"),
-    BotCommand(command="cancel", description="Отменить ввод желания"),
-    BotCommand(command="help", description="Показать справку"),
-    BotCommand(command="about", description="О проекте"),
+    BotCommand(command="start", description="открыть меню"),
+    BotCommand(command="quiz", description="сыграем в квиз"),
+    BotCommand(command="mood", description="случайный момент"),
+    BotCommand(command="favorite", description="любимое фото"),
+    BotCommand(command="wish", description="загадать желание"),
+    BotCommand(command="wishlist", description="мой вишлист"),
+    BotCommand(command="cancel", description="отменить"),
+    BotCommand(command="help", description="что я умею"),
+    BotCommand(command="about", description="о боте"),
 )
 
 
@@ -47,7 +45,6 @@ def build_dispatcher(config: AppConfig, database: WishlistDatabase) -> Dispatche
     dispatcher.include_router(build_info_router(config))
     dispatcher.include_router(build_quiz_router(config))
     dispatcher.include_router(build_mood_router(config, database))
-    dispatcher.include_router(build_relationship_router(config))
     dispatcher.include_router(build_wishlist_router(config, database))
     return dispatcher
 

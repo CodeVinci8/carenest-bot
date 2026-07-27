@@ -51,7 +51,7 @@ def test_confirmation_keyboard_has_delete_and_cancel_actions() -> None:
     keyboard = get_confirmation_keyboard(5, wishlist_fingerprint("Книга"))
 
     buttons = keyboard.inline_keyboard[0]
-    assert [button.text for button in buttons] == ["Удалить", "Отмена"]
+    assert [button.text for button in buttons] == ["убрать", "отмена"]
     assert ":confirm:" in buttons[0].callback_data
     assert ":cancel:" in buttons[1].callback_data
 
@@ -92,4 +92,4 @@ async def test_cancel_clears_wishlist_input_state() -> None:
     await cancel_wishlist_input(message, state)
 
     assert state.cleared is True
-    assert message.answers == ["Добавление желания отменено."]
+    assert message.answers == ["окей, отменил"]

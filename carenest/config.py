@@ -5,7 +5,6 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
-from datetime import date
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -54,6 +53,10 @@ class ComplimentSettings:
     minute: int = 0
     timezone: str = "UTC"
     safe_context: tuple[str, ...] = ()
+    # Approved, depersonalised traits of the recipient the AI may lean on
+    # (character, interests, what is valued, preferred tone). Never contains
+    # name, ids, dates, media, messages, wishlist or other private data.
+    compliment_profile: tuple[str, ...] = ()
     local_fallbacks: tuple[str, ...] = ("Ты умеешь делать обычный день заметно теплее.",)
     api_key: str | None = None
     base_url: str = "https://aiprimetech.io"
@@ -80,7 +83,6 @@ class AppConfig:
     recipient_id: int | None
     recipient_id_source: str | None
     recipient_name: str
-    relationship_start_date: date | None
     final_quiz_message: str
     code_word: str
     morning_messages: tuple[str, ...]
@@ -281,19 +283,6 @@ def _parse_questions(raw_questions: Any, errors: list[str]) -> tuple[QuizQuestio
     return tuple(questions)
 
 
-def _parse_date(value: Any, errors: list[str]) -> date | None:
-    if value in (None, ""):
-        return None
-    if not isinstance(value, str):
-        errors.append("relationship_start_date должен быть датой в формате ГГГГ-ММ-ДД.")
-        return None
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        errors.append("relationship_start_date должен быть корректной датой в формате ГГГГ-ММ-ДД.")
-        return None
-
-
 def _parse_scheduler(raw: Any, errors: list[str]) -> SchedulerSettings:
     if raw is None:
         raw = {}
@@ -343,6 +332,7 @@ def _parse_compliments(
     minute = raw.get("minute", 0)
     timezone = raw.get("timezone", "UTC")
     safe_context = raw.get("safe_context", [])
+    compliment_profile = raw.get("compliment_profile", [])
     local_fallbacks = raw.get(
         "local_fallbacks",
         ["Ты умеешь делать обычный день заметно теплее."],
@@ -377,6 +367,12 @@ def _parse_compliments(
     ):
         errors.append("compliments.safe_context должен быть списком коротких непустых строк.")
         safe_context = []
+    if not isinstance(compliment_profile, list) or any(
+        not isinstance(item, str) or not item.strip() or len(item.strip()) > 200
+        for item in compliment_profile
+    ):
+        errors.append("compliments.compliment_profile должен быть списком коротких непустых строк.")
+        compliment_profile = []
     if (
         not isinstance(local_fallbacks, list)
         or not local_fallbacks
@@ -404,6 +400,7 @@ def _parse_compliments(
         minute=minute,
         timezone=timezone,
         safe_context=tuple(item.strip() for item in safe_context),
+        compliment_profile=tuple(item.strip() for item in compliment_profile),
         local_fallbacks=tuple(item.strip() for item in local_fallbacks),
         api_key=api_key,
         base_url=base_url,
@@ -544,10 +541,6 @@ def inspect_configuration(
     if compliments.enabled and recipient_id is None:
         errors.append("Для включённых AI-комплиментов требуется RECIPIENT_ID.")
 
-    relationship_date = _parse_date(raw.get("relationship_start_date"), errors)
-    if relationship_date is None:
-        warnings.append("Дата начала отношений не задана; счётчик дней будет недоступен.")
-
     recipient_name = raw.get("recipient_name", "близкий человек")
     final_message = raw.get("final_quiz_message", DEFAULT_FINAL_MESSAGE)
     code_word = raw.get("code_word", "")
@@ -622,7 +615,6 @@ def inspect_configuration(
         recipient_id=recipient_id,
         recipient_id_source=recipient_source,
         recipient_name=recipient_name if isinstance(recipient_name, str) else "",
-        relationship_start_date=relationship_date,
         final_quiz_message=final_message if isinstance(final_message, str) else "",
         code_word=code_word if isinstance(code_word, str) else "",
         morning_messages=morning_messages,

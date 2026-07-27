@@ -26,14 +26,19 @@ logger = logging.getLogger(__name__)
 SPACE_RE = re.compile(r"\s+")
 
 COMPLIMENT_SYSTEM_PROMPT = (
-    "Напиши по-русски тёплый комплимент из одного или двух естественных "
-    "предложений. Не используй инфантильный или манипулятивный тон, "
-    "сексуальный контент, советы, выдуманные события и упоминания ИИ."
+    "Ты пишешь одно короткое, тёплое и естественное сообщение-комплимент по-русски "
+    "(одно-два предложения) для близкого человека. Опирайся на разрешённый обезличенный "
+    "профиль ниже, если он есть, но не перечисляй его и не цитируй дословно. Не называй "
+    "имя, не упоминай ИИ, модель, промпт или технический контекст. Без пошлости, лести "
+    "через край, канцелярита, советов и выдуманных событий. Пусть звучит живо и "
+    "по-человечески."
 )
 
 
 class ComplimentProvider(Protocol):
-    async def generate(self, safe_context: tuple[str, ...]) -> str: ...
+    async def generate(
+        self, safe_context: tuple[str, ...], profile: tuple[str, ...] = ()
+    ) -> str: ...
 
 
 class ComplimentProviderError(RuntimeError):
@@ -64,11 +69,12 @@ class OpenAICompatibleComplimentProvider:
             api_key=api_key,
             base_url=_normalize_openai_base_url(base_url),
             max_retries=0,
-            timeout=12.0,
+            timeout=30.0,
         )
 
-    async def generate(self, safe_context: tuple[str, ...]) -> str:
-        context = "\n".join(f"- {item}" for item in safe_context) or "- Без личных деталей."
+    async def generate(self, safe_context: tuple[str, ...], profile: tuple[str, ...] = ()) -> str:
+        lines = [item for item in (*safe_context, *profile) if item]
+        context = "\n".join(f"- {item}" for item in lines) or "- Без личных деталей."
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
@@ -77,7 +83,7 @@ class OpenAICompatibleComplimentProvider:
                     {"role": "system", "content": COMPLIMENT_SYSTEM_PROMPT},
                     {
                         "role": "user",
-                        "content": "Разрешённый обезличенный контекст:\n" + context,
+                        "content": "Разрешённый обезличенный профиль:\n" + context,
                     },
                 ],
             )
@@ -170,7 +176,7 @@ async def run_scheduled_compliment(
     text: str
     if provider is not None:
         try:
-            candidate = await provider.generate(settings.safe_context)
+            candidate = await provider.generate(settings.safe_context, settings.compliment_profile)
             if normalize_compliment(candidate).casefold() in {
                 normalize_compliment(item).casefold() for item in recent
             }:

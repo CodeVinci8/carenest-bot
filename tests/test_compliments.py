@@ -16,10 +16,10 @@ class FakeProvider:
     def __init__(self, result: str = "Тёплый тестовый комплимент.", error: str | None = None):
         self.result = result
         self.error = error
-        self.calls: list[tuple[str, ...]] = []
+        self.calls: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
 
-    async def generate(self, safe_context: tuple[str, ...]) -> str:
-        self.calls.append(safe_context)
+    async def generate(self, safe_context: tuple[str, ...], profile: tuple[str, ...] = ()) -> str:
+        self.calls.append((safe_context, profile))
         if self.error:
             raise ComplimentProviderError(self.error)
         return self.result
@@ -47,6 +47,7 @@ def enabled_config(tmp_path, monkeypatch, write_config):
                 "minute": 30,
                 "timezone": "Europe/Moscow",
                 "safe_context": ["Любит спокойный юмор."],
+                "compliment_profile": ["Ценит внимание к мелочам."],
                 "local_fallbacks": [
                     "Твоя внимательность делает мир теплее.",
                     "С тобой в обычном дне больше света.",
@@ -166,7 +167,7 @@ async def test_provider_error_log_does_not_contain_secret(
 
 
 @pytest.mark.asyncio
-async def test_duplicate_is_replaced_and_only_safe_context_reaches_provider(
+async def test_duplicate_is_replaced_and_only_allowed_context_reaches_provider(
     tmp_path, monkeypatch, write_config
 ) -> None:
     config = enabled_config(tmp_path, monkeypatch, write_config)
@@ -185,7 +186,8 @@ async def test_duplicate_is_replaced_and_only_safe_context_reaches_provider(
 
     assert result.source == "local"
     assert bot.messages[0][1] != provider.result
-    assert provider.calls == [("Любит спокойный юмор.",)]
+    # Only the approved safe_context and compliment_profile reach the provider.
+    assert provider.calls == [(("Любит спокойный юмор.",), ("Ценит внимание к мелочам.",))]
 
 
 @pytest.mark.asyncio

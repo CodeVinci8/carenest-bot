@@ -26,7 +26,6 @@ def write_config():
     def writer(root: Path, overrides: dict | None = None) -> Path:
         data = {
             "recipient_name": "близкий человек",
-            "relationship_start_date": "2020-01-01",
             "final_quiz_message": "Квиз завершён: {code_word}",
             "code_word": "пример",
             "morning_messages": ["Доброе утро!"],
